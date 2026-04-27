@@ -2,6 +2,7 @@
 MongoDB Database Configuration
 """
 import os
+import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional
 
@@ -26,8 +27,7 @@ async def connect_to_mongo():
         return True
     except Exception as e:
         print(f"[WARNING] Failed to connect to MongoDB: {e}")
-        print("[WARNING] Application will run without history features")
-        print("[WARNING] See MONGODB_SETUP.md for MongoDB installation instructions")
+        print("[WARNING] Application will run without history/auth features")
         client = None
         database = None
         return False
@@ -41,6 +41,24 @@ async def close_mongo_connection():
         print("Closed MongoDB connection")
 
 
+async def ensure_connected() -> bool:
+    """Try to reconnect if not connected."""
+    global client, database
+    if database is not None:
+        try:
+            await client.admin.command('ping')
+            return True
+        except Exception:
+            pass  # Fall through to reconnect
+    return await connect_to_mongo()
+
+
 def get_database():
-    """Get database instance"""
+    """Get database instance — raises 503 if MongoDB is not available."""
+    if database is None:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable. Please ensure MongoDB is running on localhost:27017."
+        )
     return database

@@ -47,6 +47,7 @@ class AnalysisResultDB(BaseModel):
     uncertain_frames: int
     frame_predictions: List[FramePredictionDB]
     processing_time: Optional[float] = None
+    saved_video_path: Optional[str] = None
     
     class Config:
         populate_by_name = True
@@ -81,6 +82,7 @@ class AnalysisHistoryResponse(BaseModel):
     real_frames: int
     uncertain_frames: int
     processing_time: Optional[float] = None
+    saved_video_path: Optional[str] = None
     
     class Config:
         json_schema_extra = {
@@ -101,6 +103,60 @@ class AnalysisHistoryResponse(BaseModel):
         }
 
 
+class UserDB(BaseModel):
+    """User model for database"""
+    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    username: str
+    hashed_password: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    # WebAuthn credentials
+    credentials: List[dict] = []
+    
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class UserResponse(BaseModel):
+    id: str
+    username: str
+
 class AnalysisDetailResponse(AnalysisHistoryResponse):
     """Detailed response including frame predictions"""
     frame_predictions: List[FramePredictionDB]
+
+# --- Auth Models ---
+
+class UserCredential(BaseModel):
+    """WebAuthn credential model"""
+    credential_id: str
+    public_key: str
+    sign_count: int
+    transports: Optional[List[str]] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class SignupRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class WebAuthnRegistrationOptions(BaseModel):
+    options: dict
+
+class WebAuthnRegistrationVerifyRequest(BaseModel):
+    username: str
+    response: dict
+
+class WebAuthnLoginOptionsRequest(BaseModel):
+    username: str
+
+class WebAuthnLoginVerifyRequest(BaseModel):
+    username: str
+    response: dict
