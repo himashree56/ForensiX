@@ -13,6 +13,9 @@ import {
 } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
 import './App.css';
+import Auth from './components/Auth.jsx';
+import { registerBiometrics } from './utils/webauthn_client.js';
+
 
 // Register Chart.js components
 ChartJS.register(
@@ -41,6 +44,8 @@ function App() {
   const [viewMode, setViewMode] = useState('upload');
   const [history, setHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [token, setToken] = useState(() => localStorage.getItem('token'));
+  const [biometricMsg, setBiometricMsg] = useState('');
 
   const checkApiHealth = async () => {
     try {
@@ -58,7 +63,9 @@ function App() {
   const fetchHistory = async () => {
     setLoadingHistory(true);
     try {
-      const response = await fetch(`${API_URL}/history?limit=20`);
+      const response = await fetch(`${API_URL}/history?limit=20`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      });
       if (response.ok) {
         const data = await response.json();
         setHistory(data);
@@ -74,7 +81,9 @@ function App() {
 
   const loadHistoryItem = async (id) => {
     try {
-      const response = await fetch(`${API_URL}/history/${id}`);
+      const response = await fetch(`${API_URL}/history/${id}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      });
       if (response.ok) {
         const data = await response.json();
         setResult({
@@ -95,6 +104,50 @@ function App() {
       setError('Error loading analysis details');
       console.error('Error:', err);
     }
+  };
+
+  const handleDeleteHistory = async (e, id) => {
+    e.stopPropagation(); // Prevent card click
+    if (!window.confirm('Are you sure you want to delete this analysis?')) return;
+    try {
+      const response = await fetch(`${API_URL}/history/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      });
+      if (response.ok) {
+        fetchHistory(); // Refresh list
+      } else {
+        alert('Failed to delete history item');
+      }
+    } catch (err) {
+      console.error('Error deleting history:', err);
+    }
+  };
+
+  const handleDownloadVideo = (e, id) => {
+    e.stopPropagation(); // Prevent card click
+    // Trigger download via hidden anchor
+    const link = document.createElement('a');
+    link.href = `${API_URL}/video/${id}?token=${localStorage.getItem('token')}`; // Note: FastAPI might not use query token depending on middleware, but we'll try directly or use a fetch fallback if needed. Actually it's better to just open it in a new tab if no token required for GET, or since we have OAuth2PasswordBearer we must send header.
+    // To send auth header for download, we can use fetch and object URL:
+    fetch(`${API_URL}/video/${id}`, {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    })
+    .then(res => {
+      if(!res.ok) throw new Error('Download failed');
+      return res.blob();
+    })
+    .then(blob => {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `video_${id}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+    })
+    .catch(err => alert('Failed to download video: ' + err.message));
   };
 
   // Check API health on mount
@@ -175,6 +228,7 @@ function App() {
 
       const response = await fetch(`${API_URL}/upload-video`, {
         method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
         body: formData,
       });
 
@@ -261,6 +315,29 @@ function App() {
     };
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    setResult(null);
+    setFile(null);
+    setError(null);
+  };
+
+  const handleLinkBiometrics = async () => {
+    setBiometricMsg('');
+    try {
+      await registerBiometrics();
+      setBiometricMsg('✅ Biometrics linked! You can now use fingerprint/iris to login.');
+    } catch (err) {
+      setBiometricMsg('❌ Failed: ' + err.message);
+    }
+  };
+
+  // Show auth wall if not logged in
+  if (!token) {
+    return <Auth onLogin={(t) => { localStorage.setItem('token', t); setToken(t); }} />;
+  }
+
   return (
     <div className="app">
       {/* Header */}
@@ -273,15 +350,30 @@ function App() {
               <p>AI-Powered Video Authenticity Analysis</p>
             </div>
           </div>
-          <div className="status-badge">
-            <div
-              className="status-indicator"
-              style={{
-                background: apiStatus === 'online' ? 'var(--color-success)' : 'var(--color-danger)',
-                boxShadow: apiStatus === 'online' ? '0 0 10px var(--color-success)' : '0 0 10px var(--color-danger)'
-              }}
-            />
-            <span>{apiStatus === 'online' ? 'API Online' : apiStatus === 'offline' ? 'API Offline' : 'Checking...'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+            {biometricMsg && <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>{biometricMsg}</span>}
+            <button
+              onClick={handleLinkBiometrics}
+              style={{ background: 'rgba(138,92,246,0.2)', border: '1px solid var(--color-primary)', color: 'var(--color-primary-light)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.8rem', cursor: 'pointer', fontSize: 'var(--font-size-sm)', fontWeight: 600 }}
+            >
+              🔗 Link Biometrics
+            </button>
+            <button
+              onClick={handleLogout}
+              style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid var(--color-danger)', color: 'var(--color-danger)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.8rem', cursor: 'pointer', fontSize: 'var(--font-size-sm)', fontWeight: 600 }}
+            >
+              Logout
+            </button>
+            <div className="status-badge">
+              <div
+                className="status-indicator"
+                style={{
+                  background: apiStatus === 'online' ? 'var(--color-success)' : 'var(--color-danger)',
+                  boxShadow: apiStatus === 'online' ? '0 0 10px var(--color-success)' : '0 0 10px var(--color-danger)'
+                }}
+              />
+              <span>{apiStatus === 'online' ? 'API Online' : apiStatus === 'offline' ? 'API Offline' : 'Checking...'}</span>
+            </div>
           </div>
         </div>
       </header>
@@ -423,8 +515,28 @@ function App() {
                           <span className="file-icon">🎬</span>
                           <span className="filename-text">{item.filename}</span>
                         </div>
-                        <div className={`prediction-badge ${item.prediction.toLowerCase()}`}>
-                          {item.prediction}
+                        <div className="history-actions" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                          <div className={`prediction-badge ${item.prediction.toLowerCase()}`} style={{ marginRight: '0.5rem' }}>
+                            {item.prediction}
+                          </div>
+                          {item.saved_video_path && (
+                            <button 
+                              className="icon-btn" 
+                              title="Download Video"
+                              onClick={(e) => handleDownloadVideo(e, item.id)}
+                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1.2rem', padding: '0.2rem' }}
+                            >
+                              ⬇️
+                            </button>
+                          )}
+                          <button 
+                            className="icon-btn" 
+                            title="Delete Analysis"
+                            onClick={(e) => handleDeleteHistory(e, item.id)}
+                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1.2rem', padding: '0.2rem' }}
+                          >
+                            🗑️
+                          </button>
                         </div>
                       </div>
 

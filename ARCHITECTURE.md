@@ -1,383 +1,225 @@
-# 🏗️ Architecture Documentation
+# 🏛️ ForensiX AI — Architecture
 
-## System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         USER INTERFACE                           │
-│                    (React + TypeScript)                          │
-│                                                                   │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │   Upload     │  │   Progress   │  │   Results    │          │
-│  │  Component   │  │   Tracker    │  │   Display    │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ HTTP/REST
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                         API LAYER                                │
-│                        (FastAPI)                                 │
-│                                                                   │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │   /health    │  │ /upload-video│  │     CORS     │          │
-│  │   Endpoint   │  │   Endpoint   │  │  Middleware  │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    PROCESSING LAYER                              │
-│                                                                   │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │    Video     │  │    Frame     │  │  Parallel    │          │
-│  │  Extraction  │  │  Processing  │  │  Execution   │          │
-│  └──────────────┘  └──────────────┘  └──────────────┘          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      MODEL LAYER                                 │
-│                  (Vision-Mamba Model)                            │
-│                                                                   │
-│  ┌──────────────────────────────────────────────────┐           │
-│  │              PyTorch Model                        │           │
-│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐ │           │
-│  │  │    CNN     │→ │   Pooling  │→ │   Linear   │ │           │
-│  │  │  Backbone  │  │            │  │    Head    │ │           │
-│  │  └────────────┘  └────────────┘  └────────────┘ │           │
-│  └──────────────────────────────────────────────────┘           │
-│                                                                   │
-│  Input: 224x224 RGB → Output: Sigmoid Score [0,1]               │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-## Data Flow
-
-### 1. Video Upload Flow
-
-```
-User → Frontend → API → Validation → Temporary Storage
-                                            │
-                                            ▼
-                                    Frame Extraction
-                                            │
-                                            ▼
-                                    ┌──────────────┐
-                                    │ Frame Queue  │
-                                    └──────────────┘
-                                            │
-                        ┌───────────────────┼───────────────────┐
-                        ▼                   ▼                   ▼
-                   Worker 1            Worker 2            Worker 3
-                        │                   │                   │
-                        └───────────────────┼───────────────────┘
-                                            ▼
-                                    Aggregate Results
-                                            │
-                                            ▼
-                                    Return to Frontend
-```
-
-### 2. Frame Processing Pipeline
-
-```
-Video File
-    │
-    ▼
-Extract Frames (OpenCV)
-    │
-    ├─→ Frame 0 (t=0.0s)
-    ├─→ Frame 1 (t=0.2s)
-    ├─→ Frame 2 (t=0.4s)
-    └─→ ...
-         │
-         ▼
-Preprocess Each Frame
-    │
-    ├─→ Resize to 224x224
-    ├─→ Convert BGR → RGB
-    ├─→ Normalize (ImageNet)
-    └─→ Convert to Tensor
-         │
-         ▼
-Model Inference
-    │
-    ├─→ Forward Pass
-    ├─→ Apply Sigmoid
-    └─→ Get Score [0,1]
-         │
-         ▼
-Classify Frame
-    │
-    ├─→ score ≥ 0.65 → FAKE
-    ├─→ score ≤ 0.35 → REAL
-    └─→ else → UNCERTAIN
-         │
-         ▼
-Aggregate All Frames
-    │
-    ├─→ Mean Score
-    ├─→ Count Predictions
-    └─→ Final Decision
-         │
-         ▼
-Return Results
-```
-
-## Component Details
-
-### Frontend Components
-
-#### 1. Upload Component
-- **Purpose**: Handle video file selection
-- **Features**:
-  - Drag-and-drop support
-  - File validation
-  - Visual feedback
-- **State**: `file`, `isDragging`, `error`
-
-#### 2. Progress Tracker
-- **Purpose**: Show analysis progress
-- **Features**:
-  - Animated progress bar
-  - Status messages
-  - Percentage display
-- **State**: `progress`, `isAnalyzing`
-
-#### 3. Results Display
-- **Purpose**: Visualize analysis results
-- **Features**:
-  - Prediction badge
-  - Confidence score
-  - Statistics grid
-  - Frame timeline
-- **State**: `result`
-
-### Backend Components
-
-#### 1. API Server (main.py)
-- **Framework**: FastAPI
-- **Port**: 8000
-- **Features**:
-  - Auto-generated OpenAPI docs
-  - CORS middleware
-  - Request validation
-  - Error handling
-
-#### 2. Video Processor
-- **Library**: OpenCV (cv2)
-- **Functions**:
-  - `extract_frames()`: Extract frames at specified FPS
-  - `analyze_frame()`: Process single frame
-  - `aggregate_predictions()`: Combine results
-
-#### 3. Model Inference (inference.py)
-- **Framework**: PyTorch
-- **Model**: VisionMambaLite
-- **Functions**:
-  - `load_model()`: Load model at startup
-  - `predict_frame()`: Inference on single frame
-
-## Technology Stack
-
-### Frontend
-```
-React 18.3.1
-├── TypeScript 5.6.2
-├── Vite 7.3.1
-└── CSS Variables (Design System)
-```
-
-### Backend
-```
-Python 3.10+
-├── FastAPI 0.109.0
-├── Uvicorn 0.27.0
-├── PyTorch 2.1.2
-├── OpenCV 4.9.0
-└── Safetensors 0.4.1
-```
-
-### DevOps
-```
-Docker 20.10+
-├── Docker Compose 2.0+
-├── Nginx (Frontend)
-└── Multi-stage builds
-```
-
-## Performance Characteristics
-
-### Backend Performance
-
-| Metric | Value | Notes |
-|--------|-------|-------|
-| Model Load Time | ~2-5s | One-time at startup |
-| Frame Extraction | ~0.1s/frame | Depends on video codec |
-| Inference Time | ~10-50ms/frame | CPU: 50ms, GPU: 10ms |
-| Total Processing | ~5-30s | For 30s video at 5 FPS |
-
-### Frontend Performance
-
-| Metric | Value | Notes |
-|--------|-------|-------|
-| Initial Load | <1s | With code splitting |
-| Bundle Size | ~200KB | Minified + gzipped |
-| Time to Interactive | <2s | On 3G connection |
-| Lighthouse Score | 90+ | Performance metric |
-
-## Scalability Considerations
-
-### Horizontal Scaling
-
-```
-                    ┌─────────────┐
-                    │Load Balancer│
-                    └─────────────┘
-                           │
-        ┌──────────────────┼──────────────────┐
-        ▼                  ▼                  ▼
-   ┌─────────┐        ┌─────────┐        ┌─────────┐
-   │Backend 1│        │Backend 2│        │Backend 3│
-   └─────────┘        └─────────┘        └─────────┘
-        │                  │                  │
-        └──────────────────┼──────────────────┘
-                           ▼
-                    ┌─────────────┐
-                    │Shared Model │
-                    │   Storage   │
-                    └─────────────┘
-```
-
-### Vertical Scaling
-
-- **CPU**: 2-4 cores minimum
-- **RAM**: 2-4 GB minimum
-- **GPU**: Optional (10x speedup)
-- **Storage**: 1 GB for model + temp files
-
-## Security Architecture
-
-### Frontend Security
-- Input validation
-- File type checking
-- Size limits
-- XSS prevention
-- HTTPS enforcement
-
-### Backend Security
-- CORS configuration
-- Request validation (Pydantic)
-- File sanitization
-- Rate limiting
-- Error message sanitization
-
-### Network Security
-```
-Internet
-    │
-    ▼
-┌─────────────┐
-│   Firewall  │
-└─────────────┘
-    │
-    ▼
-┌─────────────┐
-│     WAF     │
-└─────────────┘
-    │
-    ▼
-┌─────────────┐
-│Load Balancer│
-└─────────────┘
-    │
-    ▼
-Application Servers
-```
-
-## Monitoring & Logging
-
-### Metrics to Track
-
-1. **API Metrics**
-   - Request count
-   - Response time
-   - Error rate
-   - Success rate
-
-2. **Model Metrics**
-   - Inference time
-   - Prediction distribution
-   - Confidence scores
-
-3. **System Metrics**
-   - CPU usage
-   - Memory usage
-   - Disk I/O
-   - Network traffic
-
-### Logging Strategy
-
-```python
-# Application Logs
-INFO: Video uploaded - size: 50MB
-INFO: Extracted 150 frames
-INFO: Analysis complete - prediction: FAKE (85%)
-
-# Error Logs
-ERROR: Failed to extract frames - corrupted video
-ERROR: Model inference failed - out of memory
-
-# Performance Logs
-PERF: Frame extraction: 2.3s
-PERF: Model inference: 15.2s
-PERF: Total processing: 18.1s
-```
-
-## Deployment Architecture
-
-### Development
-```
-localhost:3000 (Frontend)
-    │
-    └─→ localhost:8000 (Backend)
-```
-
-### Production
-```
-CDN (Static Assets)
-    │
-    ▼
-users.example.com (Frontend)
-    │
-    └─→ api.example.com (Backend)
-            │
-            └─→ Model Storage (S3/GCS)
-```
-
-## Future Enhancements
-
-1. **Batch Processing**
-   - Process multiple videos
-   - Queue management
-   - Background jobs
-
-2. **Advanced Analytics**
-   - Temporal analysis
-   - Face detection
-   - Audio analysis
-
-3. **User Management**
-   - Authentication
-   - Usage tracking
-   - API keys
-
-4. **Model Improvements**
-   - Ensemble models
-   - Real-time processing
-   - Edge deployment
+This document describes the system architecture, component responsibilities, and design decisions of the ForensiX AI deepfake detection platform.
 
 ---
 
-**Last Updated**: 2026-02-01
+## High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                          Browser (Client)                            │
+│                                                                       │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │                    React 19 + Vite 7                         │    │
+│  │                                                               │    │
+│  │  ┌───────────────┐  ┌────────────────┐  ┌────────────────┐  │    │
+│  │  │   Auth.jsx    │  │    App.jsx     │  │ webauthn_client│  │    │
+│  │  │ Split-screen  │  │ Dashboard /    │  │    .js         │  │    │
+│  │  │ login/signup  │  │ History / Upload│  │ Passkey helpers│  │    │
+│  │  │ Mandatory 2FA │  │ Video analysis │  │                │  │    │
+│  │  └───────────────┘  └────────────────┘  └────────────────┘  │    │
+│  │              │               │                  │             │    │
+│  │              └───────────────┴──────────────────┘             │    │
+│  │                       HTTP / Fetch API                         │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+└────────────────────────────────┬────────────────────────────────────┘
+                                  │ HTTP (JSON + Multipart)
+                                  │ JWT Bearer Auth
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Backend (FastAPI / Python)                        │
+│                                                                       │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────┐  ┌───────────┐  │
+│  │   main.py   │  │  auth_utils  │  │ database.py│  │ models.py │  │
+│  │             │  │  .py         │  │            │  │           │  │
+│  │ All routes  │  │ bcrypt / JWT │  │ Motor async│  │ Pydantic  │  │
+│  │ CORS config │  │ WebAuthn     │  │ auto-recon │  │ schemas   │  │
+│  │ Global err  │  │ options/     │  │ nect logic │  │           │  │
+│  │ handler     │  │ verify       │  │            │  │           │  │
+│  └──────┬──────┘  └──────────────┘  └─────┬──────┘  └───────────┘  │
+│         │                                   │                        │
+│         ▼                                   ▼                        │
+│  ┌─────────────┐                    ┌──────────────┐                 │
+│  │ inference.py│                    │   MongoDB    │                 │
+│  │             │                    │   (Motor)    │                 │
+│  │ VisionMamba │                    │              │                 │
+│  │ Lite model  │                    │ users coll.  │                 │
+│  │ PyTorch     │                    │ analyses coll│                 │
+│  └─────────────┘                    └──────────────┘                 │
+│         │                                                            │
+│         ▼                                                            │
+│  ┌─────────────┐                                                     │
+│  │model.safe   │                                                     │
+│  │tensors      │                                                     │
+│  │(378 KB)     │                                                     │
+│  └─────────────┘                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Component Breakdown
+
+### 1. Frontend — `frontend/src/`
+
+#### `App.jsx` — Main Application Shell
+- Manages global application state: `token`, `result`, `history`, `viewMode`, `file`
+- **Navigation**: toggle between Upload and History views
+- **Video Upload**: drag-and-drop + file picker, sends `POST /upload-video` with JWT
+- **Results Display**: confidence gauge, stats grid, frame-level timeline chart, prediction badge
+- **History Dashboard**: paginated card grid; each card shows filename, prediction badge, confidence, frame stats
+- **History Actions**:
+  - ⬇️ Download: `GET /video/{id}` → `fetch()` → `Blob` → `createObjectURL` → programmatic `<a>` click
+  - 🗑️ Delete: `DELETE /history/{id}` → `window.confirm()` guard → refresh history list
+- **Download guard**: download button only renders if `item.saved_video_path` is truthy (hides for pre-feature records)
+
+#### `components/Auth.jsx` — Authentication Flow
+- **States**: `isLogin`, `justSignedUp`, `awaiting2FA`, `loading`, `error`
+- **Signup flow**:
+  1. POST `/auth/signup` → auto POST `/auth/login` → store temp JWT
+  2. `justSignedUp = true` → renders forced biometric registration screen (no skip)
+  3. `GET /auth/register/options` + `startRegistration()` + `POST /auth/register/verify` → `onLogin()`
+- **Login flow (strict 2FA)**:
+  1. Password empty guard: shows `"Please enter the password"` error, does not proceed
+  2. POST `/auth/login` → password verified
+  3. `awaiting2FA = true` → renders "Verify Biometrics" loading screen
+  4. Automatically calls `loginWithBiometrics(username)` — GET options + `startAuthentication()` + POST verify
+  5. Only if biometric succeeds: `localStorage.setItem('token', ...)` → `onLogin()`
+- **Split-screen layout**: brand banner (left panel) + glass form card (right panel), responsive stacks on mobile
+
+#### `utils/webauthn_client.js` — Browser Passkey Helpers
+- `registerBiometrics()`: fetches registration options, calls `@simplewebauthn/browser`'s `startRegistration()`, posts result for server verification
+- `loginWithBiometrics(username)`: fetches challenge, calls `startAuthentication()`, posts for verification, returns JWT data
+
+---
+
+### 2. Backend — `backend/`
+
+#### `main.py` — FastAPI Application
+- All HTTP routes defined here
+- **Startup lifecycle**: `connect_to_mongo()` → `load_model()` (loads `model.safetensors` into PyTorch)
+- **ThreadPoolExecutor(max_workers=4)**: frame analysis runs off the async event loop to avoid blocking
+- **Global exception handler**: catches unhandled 500s, prints stack trace, injects CORS headers into error responses
+- **Key route logic**:
+  - `POST /upload-video`: saves file as `uploads/{uuid4}{ext}`, extracts frames at 5 FPS, runs parallel frame analysis, aggregates, saves analysis document with `saved_video_path`
+  - `GET /video/{id}`: finds document, checks `saved_video_path` exists on filesystem, returns `FileResponse`
+  - `DELETE /history/{id}`: finds document, `Path.unlink()` the video file, `delete_one()` from MongoDB
+  - WebAuthn endpoints: challenges stored as hex strings in MongoDB; credential IDs stored as hex; login verify converts incoming base64url to hex for matching
+
+#### `auth_utils.py` — Auth Helpers
+- `hash_password()` / `verify_password()`: bcrypt with UTF-8 encoding
+- `create_access_token()`: HS256 JWT, 24-hour expiry, timezone-aware datetime
+- `get_registration_options()`: PLATFORM authenticator, user verification REQUIRED, excludes already-registered credentials to prevent duplicate registration
+- `get_authentication_options()`: builds allow-list from stored hex credential IDs
+- `RP_ID = "localhost"`, `ORIGIN = "http://localhost:3000"` — change for production deployment
+
+#### `database.py` — MongoDB Connection
+- Async Motor client with `serverSelectionTimeoutMS=5000`
+- `ensure_connected()`: ping-based health check with auto-reconnect fallback
+- `get_database()`: raises `HTTP 503` if database is unreachable — prevents silent failures that caused the original 500 errors
+
+#### `models.py` — Pydantic Schemas
+- `AnalysisResultDB`: full document schema including `saved_video_path: Optional[str]`
+- `AnalysisHistoryResponse`: API response shape, includes `saved_video_path` so frontend can decide whether to show the download button
+- `UserDB`: user document including `credentials: List[dict]` for WebAuthn passkeys
+- `WebAuthnLoginVerifyRequest`: `{username: str, response: dict}`
+
+---
+
+### 3. AI Model — `inference.py` + `model.safetensors`
+
+#### VisionMambaLite Architecture
+```
+Input: RGB frame (224×224×3)
+  ↓
+Conv2d(3→32, 3×3, stride=2) + BatchNorm2d + ReLU     → 112×112×32
+  ↓
+Conv2d(32→64, 3×3, stride=2) + BatchNorm2d + ReLU    → 56×56×64
+  ↓
+Conv2d(64→128, 3×3, stride=2) + BatchNorm2d + ReLU   → 28×28×128
+  ↓
+AdaptiveAvgPool2d(1)                                  → 1×1×128
+  ↓
+Linear(128→1) + Sigmoid                               → score ∈ [0, 1]
+```
+
+- Model weights: `model.safetensors` (≈ 379 KB)
+- Preprocessing: BGR → RGB, resize to 224×224, ImageNet normalization
+- Inference: `@torch.no_grad()` for efficiency
+- Output: single float — higher = more likely fake
+
+---
+
+### 4. Database Schema — MongoDB
+
+**Collection: `users`**
+```json
+{
+  "_id": ObjectId,
+  "username": "string",
+  "hashed_password": "bcrypt hash",
+  "created_at": ISODate,
+  "credentials": [
+    {
+      "credential_id": "hex string",
+      "public_key": [/* byte array */],
+      "sign_count": 42,
+      "created_at": ISODate
+    }
+  ],
+  "current_challenge": "hex string (temporary, cleared after verify)"
+}
+```
+
+**Collection: `analyses`**
+```json
+{
+  "_id": ObjectId,
+  "filename": "video.mp4",
+  "file_size": 10485760,
+  "upload_timestamp": ISODate,
+  "prediction": "DEEPFAKE | REAL | UNCERTAIN",
+  "confidence": 0.87,
+  "mean_score": 0.82,
+  "total_frames": 150,
+  "fake_frames": 130,
+  "real_frames": 10,
+  "uncertain_frames": 10,
+  "frame_predictions": [
+    { "frame_number": 0, "timestamp": 0.0, "score": 0.91, "prediction": "FAKE" }
+  ],
+  "processing_time": 12.4,
+  "saved_video_path": "uploads/3f2a1b4c-....mp4"
+}
+```
+
+---
+
+## Security Architecture
+
+| Layer | Mechanism | Notes |
+|---|---|---|
+| **Transport** | HTTPS (production) | HTTP in local dev |
+| **Authentication Factor 1** | bcrypt password | 24-hour JWT issued after success |
+| **Authentication Factor 2** | WebAuthn FIDO2 | Platform authenticator, UV=REQUIRED |
+| **Session Token** | HS256 JWT | Stored in `localStorage`, sent as Bearer token |
+| **CORS** | Permissive (`*`) in dev | Restrict to frontend origin in production |
+| **Error Responses** | CORS headers injected | Ensures browser can read error details |
+| **DB Errors** | HTTP 503 returned | Never silently swallowed |
+
+---
+
+## Thresholds & Configuration
+
+| Variable | Value | Description |
+|---|---|---|
+| `DEFAULT_FPS` | 5 | Frames extracted per second |
+| `FAKE_THRESHOLD` | 0.65 | Score above this = FAKE |
+| `REAL_THRESHOLD` | 0.35 | Score below this = REAL |
+| `MAX_FILE_SIZE` | 500 MB | Maximum upload size |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | 1440 (24h) | JWT lifetime |
+| `MONGODB_URL` | `mongodb://localhost:27017` | Override via env var |
+| `DATABASE_NAME` | `deepfake_detector` | Override via env var |
+| `RP_ID` | `localhost` | WebAuthn Relying Party ID |
+| `ORIGIN` | `http://localhost:3000` | WebAuthn expected origin |
