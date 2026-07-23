@@ -24,10 +24,9 @@ async def connect_to_mongo():
             MONGODB_URL,
             serverSelectionTimeoutMS=5000,
             tls=True,
-            tlsCAFile=certifi.where(),
+            tlsAllowInvalidCertificates=True,
         )
         database = client[DATABASE_NAME]
-        # Test connection
         await client.admin.command('ping')
         print(f"[SUCCESS] Connected to MongoDB at {MONGODB_URL}")
         return True
