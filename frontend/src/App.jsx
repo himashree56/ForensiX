@@ -70,6 +70,9 @@ function App() {
         const data = await response.json();
         setHistory(data);
       } else {
+        if (response.status === 401) {
+          handleLogout();
+        }
         console.error('Failed to fetch history');
       }
     } catch (err) {
@@ -235,6 +238,10 @@ function App() {
       clearInterval(progressInterval);
 
       if (!response.ok) {
+        if (response.status === 401) {
+          handleLogout();
+          throw new Error('Session expired or invalid. Please log in again.');
+        }
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Analysis failed');
       }
