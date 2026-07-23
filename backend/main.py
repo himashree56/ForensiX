@@ -84,14 +84,14 @@ app = FastAPI(
 )
 
 # CORS middleware
-# Read allowed origins from env — supports Vercel frontend + local dev
-_frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
-ALLOW_ORIGINS = [
-    _frontend_url,
+_frontend_url = os.getenv("FRONTEND_URL", "").rstrip("/")
+ALLOW_ORIGINS = list(filter(None, [
+    "https://forensi-x.vercel.app",       # production frontend (always allowed)
+    _frontend_url if _frontend_url else None,  # from env var if set
     "http://localhost:3000",
     "http://localhost:5173",
     "http://localhost:8080",
-]
+]))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOW_ORIGINS,
