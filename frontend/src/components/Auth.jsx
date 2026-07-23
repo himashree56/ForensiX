@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { loginWithBiometrics } from '../utils/webauthn_client';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const Auth = ({ onLogin }) => {
   const [isLogin, setIsLogin] = useState(true);

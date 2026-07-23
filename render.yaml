@@ -1,0 +1,29 @@
+# render.yaml — Render Blueprint for ForensiX backend
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: forensix-backend
+    runtime: docker
+    # Build from repo root so Dockerfile can access model files
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    plan: standard  # needs at least 512MB RAM for the ML model; use "starter" to test cheaply
+    healthCheckPath: /health
+    envVars:
+      # ── WebAuthn ──────────────────────────────────────────────────────────
+      - key: FRONTEND_URL
+        value: https://forensi-x.vercel.app
+      - key: WEBAUTHN_RP_ID
+        value: forensi-x.vercel.app
+      # ── JWT secret — Render will auto-generate a strong random value ──────
+      - key: SECRET_KEY
+        generateValue: true
+      # ── MongoDB — paste your Atlas connection string in Render dashboard ──
+      - key: MONGODB_URL
+        sync: false   # set manually in Render dashboard (keeps it secret)
+      - key: DB_NAME
+        value: deepfake_detector
+      # ── Misc ──────────────────────────────────────────────────────────────
+      - key: PYTHONUNBUFFERED
+        value: "1"
