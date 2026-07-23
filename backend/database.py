@@ -16,26 +16,38 @@ database = None
 
 
 async def connect_to_mongo():
-    """Connect to MongoDB"""
+    """Connect to MongoDB with fallbacks for SSL/TLS"""
     global client, database
+    
+    kwargs_options = []
     try:
         import certifi
-        client = AsyncIOMotorClient(
-            MONGODB_URL,
-            serverSelectionTimeoutMS=5000,
-            tls=True,
-            tlsAllowInvalidCertificates=True,
-        )
-        database = client[DATABASE_NAME]
-        await client.admin.command('ping')
-        print(f"[SUCCESS] Connected to MongoDB at {MONGODB_URL}")
-        return True
-    except Exception as e:
-        print(f"[WARNING] Failed to connect to MongoDB: {e}")
-        print("[WARNING] Application will run without history/auth features")
-        client = None
-        database = None
-        return False
+        kwargs_options.append({"tlsCAFile": certifi.where(), "serverSelectionTimeoutMS": 5000})
+    except ImportError:
+        pass
+
+    kwargs_options.append({"tlsAllowInvalidCertificates": True, "serverSelectionTimeoutMS": 5000})
+    kwargs_options.append({"serverSelectionTimeoutMS": 5000})
+
+    for kwargs in kwargs_options:
+        temp_client = None
+        try:
+            temp_client = AsyncIOMotorClient(MONGODB_URL, **kwargs)
+            await temp_client.admin.command('ping')
+            client = temp_client
+            database = client[DATABASE_NAME]
+            print(f"[SUCCESS] Connected to MongoDB with options {kwargs}")
+            return True
+        except Exception as err:
+            print(f"[DEBUG] MongoDB connect attempt with {kwargs} failed: {err}")
+            if temp_client:
+                temp_client.close()
+
+    print(f"[WARNING] Failed to connect to MongoDB at {MONGODB_URL}")
+    print("[WARNING] Application will run without history/auth features")
+    client = None
+    database = None
+    return False
 
 
 async def close_mongo_connection():
