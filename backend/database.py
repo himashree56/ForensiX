@@ -76,6 +76,6 @@ def get_database():
         from fastapi import HTTPException
         raise HTTPException(
             status_code=503,
-            detail="Database unavailable. Please ensure MongoDB is running on localhost:27017."
+            detail="Database unavailable. Please ensure MONGODB_URL environment variable is set in Render settings."
         )
     return database
