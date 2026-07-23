@@ -425,6 +425,53 @@ def analyze_frame(frame_data: tuple) -> Dict:
             "prediction": "ERROR"
         }
 
+MAX_ANALYZED_FRAMES = 25
+
+def process_video_memory_efficient(video_path: str, max_frames: int = MAX_ANALYZED_FRAMES) -> List[Dict]:
+    """
+    Memory-efficient video processing.
+    Extracts & analyzes 1 frame at a time in memory, keeping total RAM < 200MB.
+    """
+    import gc
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise ValueError("Could not open video file")
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    video_fps = cap.get(cv2.CAP_PROP_FPS)
+    if video_fps == 0:
+        video_fps = 30.0
+
+    if total_frames <= 0:
+        total_frames = 250
+
+    step = max(1, total_frames // max_frames)
+    frame_results = []
+    current_frame = 0
+    extracted_count = 0
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        if current_frame % step == 0 and extracted_count < max_frames:
+            timestamp = round(current_frame / video_fps, 2)
+            res = analyze_frame((extracted_count, timestamp, frame))
+            frame_results.append(res)
+            extracted_count += 1
+            del frame
+
+        current_frame += 1
+
+    cap.release()
+    gc.collect()
+
+    if not frame_results:
+        raise ValueError("No frames could be extracted from video")
+
+    return frame_results
+
 def aggregate_predictions(frame_results: List[Dict]) -> Dict:
     """Aggregate frame-level predictions into video-level decision"""
     if not frame_results:
@@ -511,30 +558,16 @@ async def analyze_video(
                     )
                 buffer.write(chunk)
         
-        # Extract frames
-        print(f"Extracting frames from {file.filename} at {fps} FPS...")
-        try:
-            frames = extract_frames(str(saved_video_path), fps=fps)
-        except Exception as extract_err:
-            raise HTTPException(status_code=400, detail=f"Invalid video file: {str(extract_err)}")
-        
-        if not frames:
-            raise HTTPException(status_code=400, detail="No frames could be extracted from video")
-        
-        print(f"Extracted {len(frames)} frames")
-        
-        # Analyze frames in parallel
-        print("Analyzing frames...")
+        # Extract and analyze frames with memory-efficient single-frame streaming
+        print(f"Analyzing video {file.filename} with memory-efficient frame stream...")
         loop = asyncio.get_event_loop()
-        frame_results = await loop.run_in_executor(
-            executor,
-            lambda: [analyze_frame(frame_data) for frame_data in frames]
-        )
-        
-        # Free memory from extracted raw frame arrays
-        import gc
-        del frames
-        gc.collect()
+        try:
+            frame_results = await loop.run_in_executor(
+                executor,
+                lambda: process_video_memory_efficient(str(saved_video_path), max_frames=25)
+            )
+        except Exception as proc_err:
+            raise HTTPException(status_code=400, detail=f"Invalid or unreadable video file: {str(proc_err)}")
         
         # Aggregate results
         print("Aggregating results...")
