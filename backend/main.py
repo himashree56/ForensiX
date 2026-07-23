@@ -513,7 +513,10 @@ async def analyze_video(
         
         # Extract frames
         print(f"Extracting frames from {file.filename} at {fps} FPS...")
-        frames = extract_frames(str(saved_video_path), fps=fps)
+        try:
+            frames = extract_frames(str(saved_video_path), fps=fps)
+        except Exception as extract_err:
+            raise HTTPException(status_code=400, detail=f"Invalid video file: {str(extract_err)}")
         
         if not frames:
             raise HTTPException(status_code=400, detail="No frames could be extracted from video")
