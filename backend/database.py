@@ -8,7 +8,7 @@ from typing import Optional
 
 # MongoDB connection settings
 MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017/")
-DATABASE_NAME = os.getenv("DATABASE_NAME", "deepfake_detector")
+DATABASE_NAME = os.getenv("DATABASE_NAME", os.getenv("DB_NAME", "deepfake_detector"))
 
 # Global database client
 client: Optional[AsyncIOMotorClient] = None
