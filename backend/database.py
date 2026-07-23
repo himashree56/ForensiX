@@ -19,7 +19,13 @@ async def connect_to_mongo():
     """Connect to MongoDB"""
     global client, database
     try:
-        client = AsyncIOMotorClient(MONGODB_URL, serverSelectionTimeoutMS=5000)
+        import certifi
+        client = AsyncIOMotorClient(
+            MONGODB_URL,
+            serverSelectionTimeoutMS=5000,
+            tls=True,
+            tlsCAFile=certifi.where(),
+        )
         database = client[DATABASE_NAME]
         # Test connection
         await client.admin.command('ping')
