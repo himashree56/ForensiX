@@ -1,8 +1,16 @@
 import os
+from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 from jose import JWTError, jwt
 import bcrypt
+
+# Load .env before any module-level env var reads
+try:
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=Path(__file__).parent / ".env")
+except ImportError:
+    pass  # rely on host-set env vars in production
 
 # Configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-for-jwt-change-it-in-production")
@@ -10,8 +18,21 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
 RP_NAME = "Vision-Mamba Deepfake Detector"
-RP_ID = "localhost"
-ORIGIN = "http://localhost:3000"
+
+# FRONTEND_URL must be set to your deployed frontend URL, e.g. https://your-app.vercel.app
+# WEBAUTHN_RP_ID must be set to the registrable domain, e.g. your-app.vercel.app
+# For local dev these fall back to localhost defaults.
+ORIGIN = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+
+def _derive_rp_id(origin: str) -> str:
+    """Derive a registrable RP ID from the origin URL."""
+    # Strip scheme (http:// or https://)
+    host = origin.split("://")[-1]
+    # Strip port if present
+    host = host.split(":")[0]
+    return host
+
+RP_ID = os.getenv("WEBAUTHN_RP_ID", _derive_rp_id(ORIGIN))
 
 # ─── Password helpers ────────────────────────────────────────────────────────
 

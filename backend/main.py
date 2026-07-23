@@ -9,6 +9,13 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import time
 
+# Load .env file before anything else reads environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=Path(__file__).parent / ".env")
+except ImportError:
+    pass  # python-dotenv not installed — rely on env vars set by host
+
 import cv2
 import numpy as np
 import torch
@@ -77,9 +84,17 @@ app = FastAPI(
 )
 
 # CORS middleware
+# Read allowed origins from env — supports Vercel frontend + local dev
+_frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+ALLOW_ORIGINS = [
+    _frontend_url,
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8080",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOW_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
