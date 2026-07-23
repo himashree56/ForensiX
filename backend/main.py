@@ -84,17 +84,9 @@ app = FastAPI(
 )
 
 # CORS middleware
-_frontend_url = os.getenv("FRONTEND_URL", "").rstrip("/")
-ALLOW_ORIGINS = list(filter(None, [
-    "https://forensi-x.vercel.app",       # production frontend (always allowed)
-    _frontend_url if _frontend_url else None,  # from env var if set
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "http://localhost:8080",
-]))
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOW_ORIGINS,
+    allow_origin_regex=r"https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -104,10 +96,15 @@ app.add_middleware(
 async def global_exception_handler(request: Request, exc: Exception):
     print(f"GLOBAL ERROR: {exc}")
     traceback.print_exc()
+    origin = request.headers.get("origin", "*")
+    headers = {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+    }
     return JSONResponse(
         status_code=500,
         content={"detail": f"Internal Server Error: {str(exc)}"},
-        headers={"Access-Control-Allow-Origin": "*"} # Force CORS header on 500
+        headers=headers
     )
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
