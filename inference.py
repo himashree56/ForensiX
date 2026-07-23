@@ -29,8 +29,10 @@ class VisionMambaLite(torch.nn.Module):
         return self.head(x).squeeze()
 
 def load_model(device="cpu"):
+    import os
+    model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model.safetensors")
     model = VisionMambaLite().to(device)
-    state = load_file("model.safetensors")
+    state = load_file(model_path)
     model.load_state_dict(state)
     model.eval()
     return model

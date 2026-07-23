@@ -8,7 +8,7 @@ from typing import Optional
 
 # MongoDB connection settings
 MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017/")
-DATABASE_NAME = os.getenv("DATABASE_NAME", "deepfake_detector")
+DATABASE_NAME = os.getenv("DATABASE_NAME", os.getenv("DB_NAME", "deepfake_detector"))
 
 # Global database client
 client: Optional[AsyncIOMotorClient] = None
@@ -19,9 +19,14 @@ async def connect_to_mongo():
     """Connect to MongoDB"""
     global client, database
     try:
-        client = AsyncIOMotorClient(MONGODB_URL, serverSelectionTimeoutMS=5000)
+        import certifi
+        client = AsyncIOMotorClient(
+            MONGODB_URL,
+            serverSelectionTimeoutMS=5000,
+            tls=True,
+            tlsAllowInvalidCertificates=True,
+        )
         database = client[DATABASE_NAME]
-        # Test connection
         await client.admin.command('ping')
         print(f"[SUCCESS] Connected to MongoDB at {MONGODB_URL}")
         return True
