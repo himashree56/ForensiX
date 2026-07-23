@@ -5,6 +5,7 @@ __pycache__/
 *.so
 .Python
 venv/
+venv_project/
 env/
 ENV/
 .venv
@@ -21,10 +22,12 @@ yarn-error.log*
 dist/
 .cache/
 
-# Environment
+# Environment — secrets are gitignored
 .env
 .env.local
 .env.*.local
+# Allow frontend production env (no secrets, just API URL for Vercel build)
+!frontend/.env.production
 
 # IDE
 .vscode/
