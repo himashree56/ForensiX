@@ -531,6 +531,11 @@ async def analyze_video(
             lambda: [analyze_frame(frame_data) for frame_data in frames]
         )
         
+        # Free memory from extracted raw frame arrays
+        import gc
+        del frames
+        gc.collect()
+        
         # Aggregate results
         print("Aggregating results...")
         final_result = aggregate_predictions(frame_results)
@@ -601,8 +606,9 @@ async def get_history(
         if db is None:
             raise HTTPException(status_code=503, detail="Database not connected")
         
-        # Query database, sorted by most recent first
-        cursor = db.analyses.find().sort("upload_timestamp", -1).skip(skip).limit(limit)
+        # Query database excluding heavy frame_predictions array to save memory
+        projection = {"frame_predictions": 0}
+        cursor = db.analyses.find({}, projection).sort("upload_timestamp", -1).skip(skip).limit(limit)
         analyses = await cursor.to_list(length=limit)
         
         # Convert to response model
