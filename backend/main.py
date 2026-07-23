@@ -499,19 +499,17 @@ async def analyze_video(
     saved_video_path = UPLOAD_DIR / saved_video_name
     
     try:
-        # Save uploaded file
+        # Save uploaded file using chunked streaming to save RAM
+        file_size = 0
         with open(saved_video_path, "wb") as buffer:
-            content = await file.read()
-            
-            # Check file size
-            file_size = len(content)
-            if file_size > MAX_FILE_SIZE:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB"
-                )
-            
-            buffer.write(content)
+            while chunk := await file.read(1024 * 1024):  # 1MB chunk
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB"
+                    )
+                buffer.write(chunk)
         
         # Extract frames
         print(f"Extracting frames from {file.filename} at {fps} FPS...")

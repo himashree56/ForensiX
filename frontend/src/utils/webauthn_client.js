@@ -17,7 +17,7 @@ export async function registerBiometrics() {
   const options = await resp.json();
 
   // 2. Trigger device biometric prompt
-  const regResp = await startRegistration(options);
+  const regResp = await startRegistration({ optionsJSON: options });
 
   // 3. Verify with server
   const verifyResp = await fetch(`${API_URL}/auth/register/verify`, {
@@ -48,7 +48,7 @@ export async function loginWithBiometrics(username) {
   const options = await resp.json();
 
   // 2. Trigger device biometric prompt
-  const authResp = await startAuthentication(options);
+  const authResp = await startAuthentication({ optionsJSON: options });
 
   // 3. Verify with server and get JWT
   const verifyResp = await fetch(`${API_URL}/auth/login/biometric/verify`, {

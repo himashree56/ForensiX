@@ -90,7 +90,7 @@ const Auth = ({ onLogin }) => {
         headers: { 'Authorization': `Bearer ${tempToken}` }
       });
       const options = await resp.json();
-      const regResp = await startRegistration(options);
+      const regResp = await startRegistration({ optionsJSON: options });
 
       const verifyResp = await fetch(`${API_URL}/auth/register/verify`, {
         method: 'POST',
